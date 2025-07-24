@@ -17,6 +17,9 @@
   },
   "encryption_key_file": "~/backups/encryption.key",
   "exclude_patterns": [
+    ".venv",
+    "._*",
+    "*.pyc",
     "*.tmp",
     "*.log",
     ".DS_Store",

@@ -306,8 +306,15 @@ class ModernBackupManager:
     def _should_exclude(self, path: Path) -> bool:
         path_str = str(path)
 
-        # Check exclude patterns
+        # Check .backupignore files (like .gitignore)
+        if self._check_backupignore(path):
+            return True
+
+        # Check exclude patterns from config
         for pattern in self.config.exclude_patterns:
+            # Skip comment lines
+            if pattern.startswith('#'):
+                continue
             if path.match(pattern) or pattern in path_str:
                 return True
 
@@ -318,6 +325,38 @@ class ModernBackupManager:
                     return False
             return True
 
+        return False
+    
+    def _check_backupignore(self, path: Path) -> bool:
+        """Check if path should be excluded based on .backupignore files"""
+        # Look for .backupignore files in parent directories
+        current_dir = path.parent if path.is_file() else path
+        
+        while current_dir and current_dir != current_dir.parent:
+            backupignore_file = current_dir / '.backupignore'
+            if backupignore_file.exists():
+                try:
+                    with open(backupignore_file, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            # Skip empty lines and comments
+                            if not line or line.startswith('#'):
+                                continue
+                            
+                            # Create relative path for pattern matching
+                            try:
+                                rel_path = path.relative_to(current_dir)
+                                if rel_path.match(line) or line in str(rel_path):
+                                    return True
+                            except ValueError:
+                                # path is not relative to current_dir
+                                continue
+                except (OSError, PermissionError):
+                    continue
+            
+            # Move up one directory
+            current_dir = current_dir.parent
+        
         return False
 
     def _calculate_checksum(self, file_path: Path) -> str:

@@ -167,6 +167,27 @@ python -m src.cli keychain get restic-backup
 python -m src.cli keychain delete restic-backup
 ```
 
+### Exclusion Management (.gitignore-like)
+
+```bash
+# Test what files would be excluded/included
+python -m src.cli exclude-test
+python -m src.cli exclude-test --show-excluded
+
+# Test a specific pattern
+python -m src.cli exclude-test --pattern "*.pdf" --show-excluded
+
+# Create .backupignore file (like .gitignore)
+python -m src.cli create-backupignore
+python -m src.cli create-backupignore /path/to/directory
+
+# View current exclusion analysis
+python -m src.cli exclude-test
+📊 Exclusion Analysis
+✅ Files to include: 46,681
+❌ Files to exclude: 0
+```
+
 ### Daemon Mode (Continuous Monitoring)
 
 ```bash
@@ -199,18 +220,29 @@ The `backup_config.json` file controls all backup behavior:
     "keep_yearly": 5
   },
   "exclude_patterns": [
-    "*.tmp",
-    "*.log", 
-    ".DS_Store",
-    "__pycache__",
-    "node_modules",
-    ".git",
-    "*.cache",
-    "*.swp",
-    ".vscode/settings.json",
-    "Thumbs.db",
-    "*.pyc",
-    ".pytest_cache"
+    "# Python",
+    "__pycache__", "*.pyc", ".venv", "venv/", ".env", ".pytest_cache",
+    
+    "# Node.js", 
+    "node_modules", ".npm", "dist/", "*.log",
+    
+    "# Java",
+    "*.class", "target/", ".gradle/", "build/",
+    
+    "# C/C++",
+    "*.o", "*.so", "*.exe", "*.dll", "CMakeFiles/",
+    
+    "# Version Control",
+    ".git", ".svn", ".hg", ".bzr",
+    
+    "# IDE/Editor",
+    ".vscode/settings.json", ".idea/", "*.sublime-workspace",
+    
+    "# System files",
+    ".DS_Store", "Thumbs.db", "*.tmp", "*.swp", "*.bak",
+    
+    "# Large archives (optional)",
+    "*.zip", "*.tar.gz", "*.iso", "*.dmg"
   ]
 }
 ```
@@ -223,8 +255,68 @@ The `backup_config.json` file controls all backup behavior:
 - **`schedule`**: Backup frequency (`1h`, `30m`, `2d`) for daemon mode
 - **`retention`**: How long to keep different backup types
 - **`encryption_key_file`**: Alternative to keychain (file-based password)
-- **`exclude_patterns`**: Files/folders to skip during backup
+- **`exclude_patterns`**: Files/folders to skip during backup (supports programming language defaults)
 - **`include_patterns`**: Override excludes for specific patterns
+
+## File Exclusion System
+
+### Multiple Exclusion Methods
+
+**1. Configuration File (`backup_config.json`)**
+```json
+"exclude_patterns": [
+  "# Python",
+  "__pycache__", "*.pyc", ".venv", ".env",
+  "# Node.js", 
+  "node_modules", ".npm", "dist/",
+  "# Version Control",
+  ".git", ".svn", ".hg"
+]
+```
+
+**2. .backupignore Files (Like .gitignore)**
+```bash
+# Create in any directory
+python -m src.cli create-backupignore /path/to/project
+
+# Example .backupignore content:
+# .backupignore
+*.tmp
+*.log
+__pycache__/
+node_modules/
+.venv/
+.DS_Store
+```
+
+**3. Runtime Pattern Testing**
+```bash
+# Test exclusion patterns
+python -m src.cli exclude-test --show-excluded
+
+# Test specific pattern
+python -m src.cli exclude-test --pattern "*.pdf"
+```
+
+### Built-in Programming Language Support
+
+The system automatically excludes common development artifacts:
+
+- **Python**: `__pycache__`, `.venv`, `*.pyc`, `.pytest_cache`, `.coverage`
+- **Node.js**: `node_modules`, `.npm`, `dist/`, `yarn-error.log`
+- **Java**: `*.class`, `target/`, `.gradle/`, `build/`
+- **C/C++**: `*.o`, `*.so`, `CMakeFiles/`, `*.exe`
+- **Go**: `vendor/`, `*.test`, `*.prof`
+- **Rust**: `target/`, `Cargo.lock`
+- **Version Control**: `.git`, `.svn`, `.hg`, `.bzr`
+- **IDEs**: `.vscode/settings.json`, `.idea/`, `*.sublime-workspace`
+- **System**: `.DS_Store`, `Thumbs.db`, `*.tmp`, `*.swp`
+
+### Exclusion Priority
+
+1. **`.backupignore` files** (hierarchical, like .gitignore)
+2. **Configuration patterns** (`exclude_patterns`)
+3. **Include patterns** (whitelist override)
 
 ## Architecture
 
@@ -244,6 +336,143 @@ The system supports Git-style references:
 - `HEAD~1`, `HEAD~2`: Previous snapshots  
 - `tag-name`: Snapshots with specific tags
 - `snap-12345678`: Direct snapshot ID
+
+## Shell Integration
+
+### Quick Installation
+
+**Option 1: Use the provided shell script**
+```bash
+# Add to your ~/.zshrc
+echo 'source /Users/z/dev/python/backup_with_restic/shell_integration.sh' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Option 2: Manual function setup**
+
+Add this function to your `~/.zshrc` or `~/.bashrc` to use the backup command from anywhere:
+
+```bash
+# Add to ~/.zshrc (macOS) or ~/.bashrc (Linux)
+backup() {
+    local backup_dir="/Users/z/dev/python/backup_with_restic"
+    local config_file="$backup_dir/backup_config.json"
+    
+    # Change to backup directory and run command
+    (cd "$backup_dir" && python -m src.cli --config "$config_file" "$@")
+}
+
+# Alternative: Using absolute paths (more robust)
+backup() {
+    /Users/z/.pyenv/versions/3.12.0/bin/python \
+        -m src.cli \
+        --config /Users/z/dev/python/backup_with_restic/backup_config.json \
+        "$@" 2>/dev/null || \
+    (cd /Users/z/dev/python/backup_with_restic && python -m src.cli "$@")
+}
+```
+
+**After adding to your shell config:**
+```bash
+# Reload your shell configuration
+source ~/.zshrc  # or source ~/.bashrc
+
+# Now use from anywhere:
+backup status                    # ✅ Works from any directory
+backup snapshot -m "Quick backup from ~/Documents"
+backup log
+backup restore latest ~/temp
+```
+
+### Advanced Shell Function (Recommended)
+
+For a more robust setup with error handling and path detection:
+
+```bash
+# Advanced backup function for ~/.zshrc (works with direnv)
+backup() {
+    local script_dir="/Users/z/dev/python/backup_with_restic"
+    local config_file="$script_dir/backup_config.json"
+    
+    # Verify script directory exists
+    if [[ ! -d "$script_dir" ]]; then
+        echo "❌ Backup script directory not found: $script_dir"
+        return 1
+    fi
+    
+    # Verify config file exists
+    if [[ ! -f "$config_file" ]]; then
+        echo "❌ Config file not found: $config_file"
+        echo "💡 Run 'backup init-config' to create one"
+        return 1
+    fi
+    
+    # Change to script directory and run command
+    # direnv will automatically activate the .venv when we cd into script_dir
+    (cd "$script_dir" && python -m src.cli --config "$config_file" "$@")
+}
+
+# Auto-completion for backup commands (optional)
+_backup_complete() {
+    local commands="snapshot log restore show status search forget exclude-test create-backupignore keychain migrate init-config"
+    COMPREPLY=($(compgen -W "$commands" -- "${COMP_WORDS[1]}"))
+}
+complete -F _backup_complete backup
+```
+
+### Usage Examples After Shell Integration
+
+```bash
+# From any directory:
+cd ~/Documents
+backup snapshot -m "Documents updated"
+
+cd ~/Projects/my-app  
+backup status
+backup log --limit 5
+
+# Create .backupignore in current project
+backup create-backupignore .
+
+# Test exclusions on current directory's files
+backup exclude-test --show-excluded
+
+# Using convenience aliases (from shell_integration.sh)
+backup-quick                     # Quick snapshot with current directory message
+backup-status                    # Show status
+backup-log                      # Show last 10 snapshots  
+backup-test                     # Test exclusions
+backup-ignore                   # Create .backupignore in current directory
+```
+
+### Available Commands After Integration
+
+```bash
+# Core commands (work from any directory)
+backup snapshot -m "message"    # Create snapshot
+backup log                      # View history
+backup status                   # Repository health
+backup show latest              # Snapshot details
+backup restore HEAD~1 ~/temp   # Restore files
+backup search "query"           # Search snapshots
+backup forget --dry-run        # Preview cleanup
+
+# Exclusion management  
+backup exclude-test             # Analyze exclusions
+backup create-backupignore .    # Create .backupignore
+backup exclude-test --pattern "*.log"  # Test pattern
+
+# Security management
+backup keychain store account   # Store password
+backup migrate --repo-path /path  # Migrate existing setup
+
+# Convenience aliases (if using shell_integration.sh)
+backup-quick                    # Quick snapshot from current directory
+backup-status                   # Show status
+backup-log                      # Last 10 snapshots
+backup-test                     # Test exclusions
+backup-ignore                   # Create .backupignore here
+```
 
 ## Development
 

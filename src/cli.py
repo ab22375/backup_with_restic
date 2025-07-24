@@ -457,6 +457,136 @@ def keychain_delete(account_name):
 
 
 @cli.command()
+@click.option("--show-excluded", is_flag=True, help="Show files that would be excluded")
+@click.option("--pattern", help="Test a specific exclusion pattern")
+@click.pass_context
+def exclude_test(ctx, show_excluded, pattern):
+    """Test exclusion patterns and see what files would be excluded"""
+    config = load_config(ctx.obj["config_path"])
+    manager = ModernBackupManager(config)
+    
+    if pattern:
+        console.print(f"Testing pattern: [yellow]{pattern}[/yellow]")
+        # Add pattern temporarily to test
+        config.exclude_patterns.append(pattern)
+    
+    excluded_files = []
+    included_files = []
+    
+    with Progress(
+        SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
+    ) as progress:
+        task = progress.add_task("Analyzing files...", total=None)
+        
+        for source_path in config.source_paths:
+            if source_path.exists():
+                for file_path in manager._walk_directory(source_path):
+                    if manager._should_exclude(file_path):
+                        excluded_files.append(file_path)
+                    else:
+                        included_files.append(file_path)
+        
+        progress.update(task, description="Analysis complete")
+    
+    console.print(f"\n📊 [bold]Exclusion Analysis[/bold]")
+    console.print(f"✅ Files to include: [green]{len(included_files):,}[/green]")
+    console.print(f"❌ Files to exclude: [red]{len(excluded_files):,}[/red]")
+    
+    if show_excluded and excluded_files:
+        table = Table(title="Excluded Files (first 50)")
+        table.add_column("File", style="red")
+        table.add_column("Reason", style="yellow")
+        
+        for file_path in excluded_files[:50]:
+            # Find which pattern matched
+            reason = "Unknown"
+            path_str = str(file_path)
+            
+            # Check .backupignore
+            if manager._check_backupignore(file_path):
+                reason = ".backupignore"
+            else:
+                # Check config patterns
+                for pattern in config.exclude_patterns:
+                    if pattern.startswith('#'):
+                        continue
+                    if file_path.match(pattern) or pattern in path_str:
+                        reason = f"Pattern: {pattern}"
+                        break
+            
+            table.add_row(str(file_path), reason)
+        
+        if len(excluded_files) > 50:
+            table.add_row("...", f"({len(excluded_files) - 50} more excluded files)")
+        
+        console.print(table)
+
+
+@cli.command()
+@click.argument("path", default=".")
+def create_backupignore(path):
+    """Create a .backupignore file with common exclusion patterns"""
+    backupignore_path = Path(path) / ".backupignore"
+    
+    if backupignore_path.exists():
+        if not click.confirm(f"{backupignore_path} exists. Overwrite?"):
+            return
+    
+    template = """# .backupignore - Exclude patterns for backup (like .gitignore)
+# Lines starting with # are comments
+# Patterns follow glob syntax: *, ?, [], **
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+*~
+
+# System files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Version Control
+.git/
+.svn/
+.hg/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+
+# Node.js
+node_modules/
+.npm/
+dist/
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Add your custom patterns below:
+
+"""
+    
+    with open(backupignore_path, 'w') as f:
+        f.write(template)
+    
+    console.print(f"✅ Created [cyan]{backupignore_path}[/cyan]")
+    console.print("Edit this file to customize exclusion patterns for this directory")
+
+
+@cli.command()
 @click.option("--repo-path", help="Path to existing Restic repository")
 @click.option("--account-name", help="Keychain account name (defaults to repo folder name)")
 def migrate(repo_path, account_name):
