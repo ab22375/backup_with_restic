@@ -1,0 +1,35 @@
+{
+  "name": "crucial-ssd-backup",
+  "source_paths": [
+    "/Users/z/_MBJ/accounting",
+    "/Users/z/_MBJ/management",
+    "/Users/z/_MBJ/ongoing",
+    "/Users/z/_MBJ/staff"
+  ],
+  "restic_repo": "/Volumes/Crucial2506/restic-backup",
+  "keychain_account": "restic-backup",
+  "schedule": "1h",
+  "retention": {
+    "keep_last": 10,
+    "keep_hourly": 24,
+    "keep_daily": 7,
+    "keep_weekly": 4,
+    "keep_monthly": 12,
+    "keep_yearly": 5
+  },
+  "exclude_patterns": [
+    "*.tmp",
+    "*.log",
+    ".DS_Store",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "*.cache",
+    "*.swp",
+    ".vscode/settings.json",
+    "Thumbs.db",
+    "*.pyc",
+    ".pytest_cache"
+  ],
+  "include_patterns": []
+}

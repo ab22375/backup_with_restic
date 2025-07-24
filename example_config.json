@@ -1,0 +1,32 @@
+{
+  "name": "personal-backup",
+  "source_paths": [
+    "~/Documents",
+    "~/Projects",
+    "~/Pictures/Important"
+  ],
+  "restic_repo": "~/backups/restic-repo",
+  "schedule": "1h",
+  "retention": {
+    "keep_last": 10,
+    "keep_hourly": 24,
+    "keep_daily": 7,
+    "keep_weekly": 4,
+    "keep_monthly": 12,
+    "keep_yearly": 5
+  },
+  "encryption_key_file": "~/backups/encryption.key",
+  "exclude_patterns": [
+    "*.tmp",
+    "*.log",
+    ".DS_Store",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    "*.cache",
+    "*.swp",
+    ".vscode/settings.json",
+    "Thumbs.db"
+  ],
+  "include_patterns": []
+}
