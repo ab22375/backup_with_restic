@@ -107,6 +107,9 @@ python -m src.cli search "project files"
 # Check backup status
 python -m src.cli status
 
+# Remove stale repository locks
+python -m src.cli unlock
+
 # Restore specific files
 python -m src.cli restore latest ~/restore --path "Documents/important.txt"
 
@@ -452,6 +455,7 @@ backup-ignore                   # Create .backupignore in current directory
 backup snapshot -m "message"    # Create snapshot
 backup log                      # View history
 backup status                   # Repository health
+backup unlock                   # Remove stale locks
 backup show latest              # Snapshot details
 backup restore HEAD~1 ~/temp   # Restore files
 backup search "query"           # Search snapshots

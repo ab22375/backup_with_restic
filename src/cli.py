@@ -277,6 +277,21 @@ def status(ctx):
 
 
 @cli.command()
+@click.pass_context
+def unlock(ctx):
+    """Remove stale locks from the repository"""
+    config = load_config(ctx.obj["config_path"])
+    manager = ModernBackupManager(config)
+    
+    try:
+        manager.restic.unlock_repo()
+        console.print("✅ Repository lock removed successfully")
+    except Exception as e:
+        console.print(f"❌ Failed to unlock repository: [bold red]{e}[/bold red]")
+        raise click.ClickException(f"Unlock failed: {e}")
+
+
+@cli.command()
 @click.argument("query")
 @click.option("--limit", "-n", default=20, help="Maximum results to show")
 @click.pass_context

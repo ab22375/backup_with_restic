@@ -121,6 +121,7 @@ python -m src.cli log                    # View history
 python -m src.cli status                 # Health check
 python -m src.cli show latest           # Detailed view
 python -m src.cli restore HEAD~1 ~/temp # Quick restore
+python -m src.cli unlock                 # Remove stale repository locks
 
 # Exclusion management (.gitignore-like)
 python -m src.cli exclude-test           # Analyze what's excluded
@@ -192,7 +193,7 @@ This is a COMPLETED implementation. All features are working in production with 
 - ✅ **Programming language defaults** (Python, Node.js, Java, C/C++, Go, Rust)
 - ✅ **Real backup repository migration** successful from environment variables
 - ✅ **File monitoring and scheduling** with Watchdog
-- ✅ **All CLI commands** working: migrate, snapshot, log, show, restore, status, search, forget, exclude-test, create-backupignore
+- ✅ **All CLI commands** working: migrate, snapshot, log, show, restore, status, search, forget, unlock, exclude-test, create-backupignore
 - ✅ **Production tested** with 46,681+ files analyzed and backed up
 
 ## Latest Enhancement: Enterprise-Grade Exclusion System
