@@ -1,12 +1,13 @@
 {
   "name": "crucial-ssd-backup",
   "source_paths": [
-    "/Users/z/_MBJ/accounting",
-    "/Users/z/_MBJ/management",
-    "/Users/z/_MBJ/ongoing",
-    "/Users/z/_MBJ/staff",
-    "/Users/z/Downloads/notes",
-    "/Users/z/dev"
+      "/Users/z/_MBJ",
+      "/Users/z/dev",
+      "/Users/z/dockers",
+      "/Users/z/Documents",
+      "/Users/z/Downloads",
+      "/Users/z/Obsidian",
+      "/Users/z/caddy"
   ],
   "restic_repo": "/Volumes/Crucial2506/restic-backup",
   "keychain_account": "restic-backup",
@@ -27,13 +28,17 @@
     "*.swp",
     "*.bak",
     "*.orig",
-    
+
     "# Version Control",
     ".git",
     ".svn",
     ".hg",
     ".bzr",
-    
+
+    "# Web2py",
+    "sessions/",
+    "errors/",
+
     "# Python",
     "__pycache__",
     "*.pyc",
@@ -68,7 +73,7 @@
     ".mypy_cache",
     ".dmypy.json",
     "dmypy.json",
-    
+
     "# Node.js",
     "node_modules",
     "npm-debug.log*",
@@ -80,7 +85,7 @@
     ".nuxt",
     "dist",
     ".cache/",
-    
+
     "# Java",
     "*.class",
     "*.jar",
@@ -92,7 +97,7 @@
     ".settings/",
     ".project",
     ".classpath",
-    
+
     "# C/C++",
     "*.o",
     "*.so",
@@ -106,16 +111,16 @@
     "CMakeFiles/",
     "Makefile",
     "cmake_install.cmake",
-    
+
     "# Go",
     "vendor/",
     "*.test",
     "*.prof",
-    
+
     "# Rust",
     "target/",
     "Cargo.lock",
-    
+
     "# IDE/Editor",
     ".vscode/settings.json",
     ".vscode/launch.json",
@@ -124,7 +129,7 @@
     "*.sublime-workspace",
     "*~",
     ".#*",
-    
+
     "# macOS",
     ".DS_Store",
     ".AppleDouble",
@@ -137,14 +142,14 @@
     ".Trashes",
     ".VolumeIcon.icns",
     ".com.apple.timemachine.donotpresent",
-    
+
     "# Windows",
     "Thumbs.db",
     "ehthumbs.db",
     "Desktop.ini",
     "$RECYCLE.BIN/",
     "*.lnk",
-    
+
     "# Logs and temp files",
     "*.log",
     "logs/",
@@ -152,7 +157,7 @@
     "*.seed",
     "*.pid.lock",
     ".nyc_output",
-    
+
     "# Large media files (optional - remove if you need these backed up)",
     "*.iso",
     "*.dmg",

@@ -4,13 +4,13 @@ A comprehensive backup solution for macOS folders with Restic versioning, real-t
 
 ## Features
 
-🔐 **Secure by Default**: Built on Restic's proven encryption  
-🚀 **Git-like Interface**: Familiar commands like `snapshot`, `log`, `restore`, `show`  
-⚡ **Real-time Monitoring**: Automatic backups triggered by file changes  
-📅 **Flexible Scheduling**: Configurable backup intervals  
-🎯 **Smart Retention**: Automatic cleanup with granular policies  
-🔍 **Rich Metadata**: Track changes with detailed commit-like messages  
-🎨 **Beautiful CLI**: Rich terminal UI with progress indicators  
+🔐 **Secure by Default**: Built on Restic's proven encryption
+🚀 **Git-like Interface**: Familiar commands like `snapshot`, `log`, `restore`, `show`
+⚡ **Real-time Monitoring**: Automatic backups triggered by file changes
+📅 **Flexible Scheduling**: Configurable backup intervals
+🎯 **Smart Retention**: Automatic cleanup with granular policies
+🔍 **Rich Metadata**: Track changes with detailed commit-like messages
+🎨 **Beautiful CLI**: Rich terminal UI with progress indicators
 
 ## Quick Start
 
@@ -21,10 +21,61 @@ A comprehensive backup solution for macOS folders with Restic versioning, real-t
    brew install restic  # macOS
    ```
 
-2. Install this package:
+2. Install [uv](https://github.com/astral-sh/uv) (modern Python package manager):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+3. Install this package:
    ```bash
    uv sync
    ```
+
+### Environment Setup with direnv (Recommended)
+
+This project includes `.envrc` for automatic virtual environment activation using [direnv](https://direnv.net/).
+
+**One-time setup:**
+```bash
+# Install direnv (if not already installed)
+brew install direnv  # macOS
+
+# Add direnv hook to your shell (~/.zshrc or ~/.bashrc)
+eval "$(direnv hook zsh)"   # For zsh
+# OR
+eval "$(direnv hook bash)"  # For bash
+
+# Allow direnv to activate the .envrc in this project
+cd /path/to/backup_with_restic
+direnv allow
+```
+
+**With direnv active**, the virtual environment activates automatically when you `cd` into the project directory, so you can run commands directly:
+```bash
+python -m src.cli log      # No "uv run" prefix needed!
+python -m src.cli status
+```
+
+**Without direnv**, use the `uv run` prefix:
+```bash
+uv run python -m src.cli log
+uv run python -m src.cli status
+```
+
+#### Shared Virtual Environment Configuration
+
+The `.envrc` is configured to use a shared virtual environment:
+```bash
+# .envrc contents:
+export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
+unset VIRTUAL_ENV
+source $UV_PROJECT_ENVIRONMENT/bin/activate
+```
+
+This means:
+- Dependencies are installed in `~/.venv-shared` instead of project-local `.venv`
+- Multiple projects can share the same environment
+- Faster setup when switching between projects with similar dependencies
 
 ### Migrate from Existing Restic Setup
 
@@ -118,6 +169,8 @@ python -m src.cli forget --dry-run  # See what would be deleted
 python -m src.cli forget             # Actually delete old backups
 ```
 
+**Note:** Examples assume direnv is active. If not using direnv, prefix all commands with `uv run`.
+
 ### Real-World Example (Based on Working Setup)
 
 ```bash
@@ -128,7 +181,7 @@ cat backup_config.json
   "source_paths": [
     "/Users/z/_MBJ/accounting",
     "/Users/z/_MBJ/management",
-    "/Users/z/_MBJ/ongoing", 
+    "/Users/z/_MBJ/ongoing",
     "/Users/z/_MBJ/staff"
   ],
   "restic_repo": "/Volumes/Crucial2506/restic-backup",
@@ -212,7 +265,7 @@ The `backup_config.json` file controls all backup behavior:
     "/Users/z/_MBJ/staff"
   ],
   "restic_repo": "/Volumes/Crucial2506/restic-backup",
-  "keychain_account": "restic-backup", 
+  "keychain_account": "restic-backup",
   "schedule": "1h",
   "retention": {
     "keep_last": 10,
@@ -225,25 +278,25 @@ The `backup_config.json` file controls all backup behavior:
   "exclude_patterns": [
     "# Python",
     "__pycache__", "*.pyc", ".venv", "venv/", ".env", ".pytest_cache",
-    
-    "# Node.js", 
+
+    "# Node.js",
     "node_modules", ".npm", "dist/", "*.log",
-    
+
     "# Java",
     "*.class", "target/", ".gradle/", "build/",
-    
+
     "# C/C++",
     "*.o", "*.so", "*.exe", "*.dll", "CMakeFiles/",
-    
+
     "# Version Control",
     ".git", ".svn", ".hg", ".bzr",
-    
+
     "# IDE/Editor",
     ".vscode/settings.json", ".idea/", "*.sublime-workspace",
-    
+
     "# System files",
     ".DS_Store", "Thumbs.db", "*.tmp", "*.swp", "*.bak",
-    
+
     "# Large archives (optional)",
     "*.zip", "*.tar.gz", "*.iso", "*.dmg"
   ]
@@ -270,7 +323,7 @@ The `backup_config.json` file controls all backup behavior:
 "exclude_patterns": [
   "# Python",
   "__pycache__", "*.pyc", ".venv", ".env",
-  "# Node.js", 
+  "# Node.js",
   "node_modules", ".npm", "dist/",
   "# Version Control",
   ".git", ".svn", ".hg"
@@ -336,7 +389,7 @@ The system automatically excludes common development artifacts:
 The system supports Git-style references:
 
 - `latest` or `HEAD`: Most recent snapshot
-- `HEAD~1`, `HEAD~2`: Previous snapshots  
+- `HEAD~1`, `HEAD~2`: Previous snapshots
 - `tag-name`: Snapshots with specific tags
 - `snap-12345678`: Direct snapshot ID
 
@@ -360,7 +413,7 @@ Add this function to your `~/.zshrc` or `~/.bashrc` to use the backup command fr
 backup() {
     local backup_dir="/Users/z/dev/python/backup_with_restic"
     local config_file="$backup_dir/backup_config.json"
-    
+
     # Change to backup directory and run command
     (cd "$backup_dir" && python -m src.cli --config "$config_file" "$@")
 }
@@ -396,20 +449,20 @@ For a more robust setup with error handling and path detection:
 backup() {
     local script_dir="/Users/z/dev/python/backup_with_restic"
     local config_file="$script_dir/backup_config.json"
-    
+
     # Verify script directory exists
     if [[ ! -d "$script_dir" ]]; then
         echo "❌ Backup script directory not found: $script_dir"
         return 1
     fi
-    
+
     # Verify config file exists
     if [[ ! -f "$config_file" ]]; then
         echo "❌ Config file not found: $config_file"
         echo "💡 Run 'backup init-config' to create one"
         return 1
     fi
-    
+
     # Change to script directory and run command
     # direnv will automatically activate the .venv when we cd into script_dir
     (cd "$script_dir" && python -m src.cli --config "$config_file" "$@")
@@ -430,7 +483,7 @@ complete -F _backup_complete backup
 cd ~/Documents
 backup snapshot -m "Documents updated"
 
-cd ~/Projects/my-app  
+cd ~/Projects/my-app
 backup status
 backup log --limit 5
 
@@ -443,7 +496,7 @@ backup exclude-test --show-excluded
 # Using convenience aliases (from shell_integration.sh)
 backup-quick                     # Quick snapshot with current directory message
 backup-status                    # Show status
-backup-log                      # Show last 10 snapshots  
+backup-log                      # Show last 10 snapshots
 backup-test                     # Test exclusions
 backup-ignore                   # Create .backupignore in current directory
 ```
@@ -461,7 +514,7 @@ backup restore HEAD~1 ~/temp   # Restore files
 backup search "query"           # Search snapshots
 backup forget --dry-run        # Preview cleanup
 
-# Exclusion management  
+# Exclusion management
 backup exclude-test             # Analyze exclusions
 backup create-backupignore .    # Create .backupignore
 backup exclude-test --pattern "*.log"  # Test pattern
@@ -486,11 +539,18 @@ backup-ignore                   # Create .backupignore here
 # Install dependencies
 uv sync
 
-# Run linting
+# Configure direnv (one-time)
+direnv allow
+
+# Run linting (with direnv active)
+ruff check src/
+ruff format src/
+
+# Or without direnv
 uv run ruff check src/
 uv run ruff format src/
 
-# Run the CLI in development
+# Run the CLI in development (with direnv active)
 python -m src.cli --help
 
 # Test with your actual repository
@@ -498,12 +558,19 @@ python -m src.cli status
 python -m src.cli log
 ```
 
+### Virtual Environment Notes
+
+- **With direnv**: Environment activates automatically when you `cd` into the project
+- **Without direnv**: Use `uv run` prefix or manually activate with `source ~/.venv-shared/bin/activate`
+- **Shared environment**: Located at `~/.venv-shared` (configured in `.envrc`)
+- **Dependencies**: Managed via `pyproject.toml` and installed with `uv sync`
+
 ### Project Structure
 
 ```
 src/
 ├── models.py          # Data models and configuration
-├── backup_manager.py  # Main backup orchestration  
+├── backup_manager.py  # Main backup orchestration
 ├── restic_wrapper.py  # Restic CLI interface
 ├── metadata_store.py  # SQLite metadata storage
 ├── monitor.py         # File monitoring and scheduling
@@ -516,7 +583,7 @@ src/
 ### Restic + Python Enhancement
 
 - **Proven Backup Tool**: Restic is battle-tested for backups
-- **Git Semantics**: Familiar interface for developers  
+- **Git Semantics**: Familiar interface for developers
 - **Better Performance**: Restic's incremental backup is superior
 - **Security by Default**: Encryption without extra setup
 - **Simpler Maintenance**: One primary tool with Python enhancements

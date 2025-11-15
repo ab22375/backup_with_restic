@@ -37,9 +37,53 @@ python -m src.cli snapshot -m "Monthly backup"  # ✅ Creates new snapshot
 
 ## Python Dependencies (using uv)
 
+### Installation
+
 ```bash
-uv add rich click pydantic watchdog gitpython python-dotenv ruff loguru 
+# Install all dependencies
+uv sync
 ```
+
+### Development Environment Setup
+
+This project uses `uv` for package management and `direnv` for automatic virtual environment activation.
+
+**Environment Configuration (`.envrc`):**
+```bash
+export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
+unset VIRTUAL_ENV
+source $UV_PROJECT_ENVIRONMENT/bin/activate
+```
+
+**Key Points:**
+- Dependencies are installed in `~/.venv-shared` (shared across projects)
+- `direnv` automatically activates the environment when entering the project directory
+- No need for `uv run` prefix when direnv is active
+
+**Package Management:**
+```bash
+# Add a new dependency
+uv add <package-name>
+
+# Install/sync all dependencies
+uv sync
+
+# Run commands without direnv
+uv run python -m src.cli <command>
+
+# Run commands with direnv (automatic activation)
+python -m src.cli <command>
+```
+
+**Dependencies (defined in `pyproject.toml`):**
+- rich>=14.0.0
+- click>=8.2.1
+- pydantic>=2.11.7
+- watchdog>=6.0.0
+- gitpython>=3.1.45
+- python-dotenv>=1.1.1
+- ruff>=0.12.4
+- loguru>=0.7.3
 
 ## Architecture Overview (IMPLEMENTED)
 
@@ -165,8 +209,12 @@ src/
 
 backup_config.json     # ✅ Working configuration with comprehensive exclusions
 .backupignore          # ✅ .gitignore-like exclusion files
+.envrc                 # ✅ direnv configuration for auto venv activation
+pyproject.toml         # ✅ uv package dependencies and project config
 example_config.json    # ✅ Template
 MIGRATION_GUIDE.md     # ✅ Security migration guide
+README.md              # ✅ User documentation
+CLAUDE.md              # ✅ AI context and implementation details
 ```
 
 ## Testing Results
@@ -210,5 +258,39 @@ python -m src.cli exclude-test --show-excluded
 📊 Exclusion Analysis
 ✅ Files to include: 46,681
 ❌ Files to exclude: 0
+```
+
+## Development Environment Configuration
+
+### direnv + Shared Virtual Environment
+
+The project is configured for automatic environment activation:
+
+**Setup in `~/.zshrc`:**
+```bash
+export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
+unset VIRTUAL_ENV
+```
+
+**Project `.envrc`:**
+```bash
+export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
+unset VIRTUAL_ENV
+source $UV_PROJECT_ENVIRONMENT/bin/activate
+```
+
+**Benefits:**
+- ✅ Automatic venv activation when entering project directory
+- ✅ Shared dependencies across multiple projects (~/.venv-shared)
+- ✅ No need for `uv run` prefix in commands
+- ✅ Seamless integration with uv package manager
+- ✅ One-time `direnv allow` per project
+
+**Workflow:**
+```bash
+cd /path/to/backup_with_restic  # direnv auto-activates venv
+python -m src.cli log           # Works immediately, no prefix needed
+uv add new-package              # Add dependencies easily
+uv sync                         # Sync dependencies
 ```
 
