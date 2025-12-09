@@ -309,6 +309,70 @@ class ResticWrapper:
             logger.error(f"Repository check failed: {e}")
             return False
 
+    def check_repo_detailed(
+        self, read_data: bool = False, read_data_subset: str = None
+    ) -> dict[str, Any]:
+        """Run detailed repository check and return structured results.
+
+        Args:
+            read_data: If True, read and verify ALL data blobs (slow)
+            read_data_subset: Verify subset of data (e.g., '5%', '500M', '1G')
+
+        Returns:
+            dict with keys: healthy, packs_ok, index_ok, snapshots_ok, data_ok, errors
+        """
+        args = ["check"]
+
+        if read_data:
+            args.append("--read-data")
+        elif read_data_subset:
+            args.extend(["--read-data-subset", read_data_subset])
+
+        result = {
+            "healthy": True,
+            "packs_ok": True,
+            "index_ok": True,
+            "snapshots_ok": True,
+            "data_ok": True,
+            "errors": [],
+        }
+
+        try:
+            cmd_result = self._run_command(args, check=False)
+            output = cmd_result.stdout + cmd_result.stderr
+
+            # Check return code - 0 means success
+            if cmd_result.returncode != 0:
+                result["healthy"] = False
+
+                # Parse output for specific error patterns
+                for line in output.split("\n"):
+                    line_lower = line.lower()
+                    # Skip "no errors" lines
+                    if "no error" in line_lower:
+                        continue
+
+                    if "error" in line_lower or "fatal" in line_lower:
+                        result["errors"].append(line.strip())
+
+                        # Categorize errors
+                        if "pack" in line_lower:
+                            result["packs_ok"] = False
+                        if "index" in line_lower:
+                            result["index_ok"] = False
+                        if "snapshot" in line_lower:
+                            result["snapshots_ok"] = False
+                        if "data" in line_lower or "blob" in line_lower:
+                            result["data_ok"] = False
+
+            logger.info(f"Repository check completed: {'passed' if result['healthy'] else 'failed'}")
+            return result
+
+        except ResticError as e:
+            result["healthy"] = False
+            result["errors"].append(str(e))
+            return result
+
     def get_repo_stats(self) -> dict[str, Any]:
         result = self._run_command(["stats", "--json"])
 

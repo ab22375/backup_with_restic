@@ -139,7 +139,7 @@ python -m src.cli restore latest ~/restore --path "Documents/important.txt"
 ### Basic Operations
 
 ```bash
-# Create a snapshot with a message
+# Create a snapshot with a message (shows real-time progress)
 python -m src.cli snapshot -m "Added new project files" --tag work
 
 # View recent backups (Git-like log)
@@ -158,12 +158,20 @@ python -m src.cli status
 # Remove stale repository locks
 python -m src.cli unlock
 
+# Verify backup integrity
+python -m src.cli verify                        # Quick structure check
+python -m src.cli verify --read-data-subset 5%  # Check 5% of data
+python -m src.cli verify --read-data            # Full data verification (slow)
+
 # Restore specific files
 python -m src.cli restore latest ~/restore --path "Documents/important.txt"
 
 # Apply retention policy
 python -m src.cli forget --dry-run  # See what would be deleted
 python -m src.cli forget             # Actually delete old backups
+
+# Debug mode (show detailed logs)
+python -m src.cli --debug snapshot -m "Debug backup"
 ```
 
 **Note:** Examples assume direnv is active. If not using direnv, prefix all commands with `uv run`.
@@ -202,9 +210,20 @@ python -m src.cli status
 ╭──────────────── Backup Status ─────────────────╮
 │ Repository: /Volumes/Crucial2506/restic-backup │
 │ Health: ✅ Healthy                             │
-│ Total snapshots: 4                             │
-│ Working directory clean                        │
+│ Total snapshots: 39                            │
+│ Last snapshot: 2025-12-09 07:26:18             │
 ╰────────────────────────────────────────────────╯
+
+# Verify backup data integrity
+python -m src.cli verify
+🔍 Verifying backup repository...
+Repository: /Volumes/Crucial2506/restic-backup
+
+✅ Repository verification passed
+
+  Pack files:    ✅ OK
+  Index:         ✅ OK
+  Snapshots:     ✅ OK
 ```
 
 ### Keychain Management
@@ -502,7 +521,7 @@ backup-ignore                   # Create .backupignore in current directory
 
 ```bash
 # Core commands (work from any directory)
-backup snapshot -m "message"    # Create snapshot
+backup snapshot -m "message"    # Create snapshot (with real-time progress)
 backup log                      # View history
 backup status                   # Repository health
 backup unlock                   # Remove stale locks
@@ -510,6 +529,11 @@ backup show latest              # Snapshot details
 backup restore HEAD~1 ~/temp   # Restore files
 backup search "query"           # Search snapshots
 backup forget --dry-run        # Preview cleanup
+
+# Verification
+backup verify                   # Quick integrity check
+backup verify --read-data-subset 10%  # Check 10% of data (recommended monthly)
+backup verify --read-data       # Full verification (slow)
 
 # Exclusion management
 backup exclude-test             # Analyze exclusions
@@ -519,6 +543,9 @@ backup exclude-test --pattern "*.log"  # Test pattern
 # Security management
 backup keychain store account   # Store password
 backup migrate --repo-path /path  # Migrate existing setup
+
+# Debug mode
+backup --debug snapshot -m "msg"  # Show detailed logs
 
 # Convenience aliases (if using shell_integration.sh)
 backup-quick                    # Quick snapshot from current directory

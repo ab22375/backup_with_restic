@@ -383,14 +383,6 @@ def status(ctx):
                 last_snap_time = status_info["last_snapshot"].strftime("%Y-%m-%d %H:%M:%S")
                 status_text.append(f"Last snapshot: {last_snap_time}\n", style="magenta")
 
-            if status_info["has_uncommitted_changes"]:
-                status_text.append(
-                    f"Uncommitted changes: {status_info['uncommitted_changes']} files\n",
-                    style="yellow",
-                )
-            else:
-                status_text.append("Working directory clean\n", style="green")
-
             panel = Panel(status_text, title="Backup Status", expand=False)
             console.print(panel)
 
@@ -430,6 +422,80 @@ def unlock(ctx):
     except Exception as e:
         console.print(f"❌ Failed to unlock repository: [bold red]{e}[/bold red]")
         raise click.ClickException(f"Unlock failed: {e}")
+
+
+@cli.command()
+@click.option("--read-data", is_flag=True, help="Read and verify all data blobs (slow but thorough)")
+@click.option("--read-data-subset", type=str, help="Verify a subset of data (e.g., '5%' or '500M')")
+@click.pass_context
+def verify(ctx, read_data, read_data_subset):
+    """Verify repository integrity and backup data health.
+
+    Without options: Quick check of repository structure and metadata.
+
+    With --read-data: Full verification reading ALL backup data (slow, but complete).
+
+    With --read-data-subset: Partial verification (e.g., '5%' or '1G' of data).
+    """
+    config = load_config(ctx.obj["config_path"])
+    manager = ModernBackupManager(config)
+
+    console.print("[bold]🔍 Verifying backup repository...[/bold]")
+    console.print(f"[dim]Repository: {config.restic_repo}[/dim]")
+    console.print()
+
+    if read_data:
+        console.print("[yellow]⚠️  Full data verification - this will read ALL backup data and may take a long time[/yellow]")
+    elif read_data_subset:
+        console.print(f"[yellow]Partial data verification - reading {read_data_subset} of data[/yellow]")
+
+    console.print()
+
+    with Progress(
+        SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
+    ) as progress:
+        task = progress.add_task("Checking repository structure...", total=None)
+
+        try:
+            # Run restic check with appropriate options
+            result = manager.restic.check_repo_detailed(
+                read_data=read_data,
+                read_data_subset=read_data_subset,
+            )
+
+            progress.update(task, description="Verification complete")
+
+            console.print()
+            if result["healthy"]:
+                console.print("[bold green]✅ Repository verification passed[/bold green]")
+            else:
+                console.print("[bold red]❌ Repository verification failed[/bold red]")
+
+            # Print details
+            console.print()
+            table = Table(box=None, show_header=False, padding=(0, 2))
+            table.add_column("Check", style="dim")
+            table.add_column("Result")
+
+            table.add_row("Pack files:", "✅ OK" if result.get("packs_ok") else "❌ Issues")
+            table.add_row("Index:", "✅ OK" if result.get("index_ok") else "❌ Issues")
+            table.add_row("Snapshots:", "✅ OK" if result.get("snapshots_ok") else "❌ Issues")
+
+            if read_data or read_data_subset:
+                table.add_row("Data blobs:", "✅ OK" if result.get("data_ok") else "❌ Issues")
+
+            console.print(table)
+
+            if result.get("errors"):
+                console.print()
+                console.print("[bold red]Errors found:[/bold red]")
+                for error in result["errors"][:10]:
+                    console.print(f"  • {error}")
+
+        except Exception as e:
+            progress.update(task, description="Verification failed")
+            console.print(f"\n[bold red]❌ Verification failed:[/bold red] {e}")
+            raise click.ClickException(str(e))
 
 
 @cli.command()

@@ -194,18 +194,12 @@ class ModernBackupManager:
             # Check repository health
             repo_healthy = self.restic.check_repo()
 
-            # Detect uncommitted changes
-            current_changes = self._detect_changes()
-            has_changes = len(current_changes) > 0
-
             return {
                 "repository_path": str(self.config.restic_repo),
                 "repository_healthy": repo_healthy,
                 "total_snapshots": len(self.restic.list_snapshots()),
                 "repository_size": repo_stats.get("total_size", 0),
                 "last_snapshot": recent_snapshots[0].timestamp if recent_snapshots else None,
-                "uncommitted_changes": len(current_changes),
-                "has_uncommitted_changes": has_changes,
                 "source_paths": [str(p) for p in self.config.source_paths],
                 "recent_snapshots": [
                     {

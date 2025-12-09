@@ -158,13 +158,18 @@ class ModernBackupManager:
 # Secure migration completed
 python -m src.cli migrate --repo-path /Volumes/Crucial2506/restic-backup
 
-# Daily operations
+# Daily operations (snapshot shows real-time progress)
 python -m src.cli snapshot -m "Daily business backup" --tag work
 python -m src.cli log                    # View history
 python -m src.cli status                 # Health check
 python -m src.cli show latest           # Detailed view
 python -m src.cli restore HEAD~1 ~/temp # Quick restore
 python -m src.cli unlock                 # Remove stale repository locks
+
+# Verify backup integrity
+python -m src.cli verify                        # Quick structure check
+python -m src.cli verify --read-data-subset 5%  # Verify 5% of data (recommended monthly)
+python -m src.cli verify --read-data            # Full data verification (slow)
 
 # Exclusion management (.gitignore-like)
 python -m src.cli exclude-test           # Analyze what's excluded
@@ -174,6 +179,9 @@ python -m src.cli create-backupignore /path/to/project  # Create .backupignore
 # Maintenance
 python -m src.cli forget --dry-run      # Check retention
 python -m src.cli forget                # Apply cleanup
+
+# Debug mode (show detailed logs)
+python -m src.cli --debug snapshot -m "Debug backup"
 ```
 
 ## Security Improvements
