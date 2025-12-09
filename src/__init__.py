@@ -1,5 +1,4 @@
 from .backup_manager import ModernBackupManager
-from .cli import cli
 from .metadata_store import MetadataStore
 from .models import BackupConfig, FileChange, RetentionPolicy, SnapshotMetadata
 from .monitor import FileMonitor, MonitorConfig, ScheduledBackupService
@@ -19,5 +18,4 @@ __all__ = [
     "FileMonitor",
     "MonitorConfig",
     "ScheduledBackupService",
-    "cli",
 ]

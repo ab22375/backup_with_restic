@@ -67,15 +67,12 @@ uv run python -m src.cli status
 The `.envrc` is configured to use a shared virtual environment:
 ```bash
 # .envrc contents:
-export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
-unset VIRTUAL_ENV
-source $UV_PROJECT_ENVIRONMENT/bin/activate
+export UV_PROJECT_ENVIRONMENT=.venv
+source .venv/bin/activate
 ```
 
 This means:
-- Dependencies are installed in `~/.venv-shared` instead of project-local `.venv`
-- Multiple projects can share the same environment
-- Faster setup when switching between projects with similar dependencies
+- Dependencies are installed in `~/.venv`
 
 ### Migrate from Existing Restic Setup
 

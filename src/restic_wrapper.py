@@ -90,7 +90,13 @@ class ResticWrapper:
         exclude_patterns: list[str] = None,
         include_patterns: list[str] = None,
         message: str = None,
-    ) -> str:
+        progress_callback: callable = None,
+    ) -> tuple[str, dict]:
+        """Run backup and return (snapshot_id, summary_stats).
+
+        Args:
+            progress_callback: Optional callback(status_dict) called with real-time progress
+        """
         args = ["backup"] + [str(path) for path in paths]
 
         if tags:
@@ -110,6 +116,10 @@ class ResticWrapper:
 
         args.append("--json")
 
+        # Use streaming mode if callback provided
+        if progress_callback:
+            return self._run_backup_streaming(args, progress_callback)
+
         result = self._run_command(args)
 
         # Parse the JSON output to get snapshot ID
@@ -120,11 +130,64 @@ class ResticWrapper:
                 raise ResticError("No snapshot ID returned from backup")
 
             logger.info(f"Backup completed with snapshot ID: {snapshot_id}")
-            return snapshot_id
+            return snapshot_id, backup_result
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse backup result: {e}")
             logger.error(f"Raw output: {result.stdout}")
             raise ResticError(f"Failed to parse backup result: {e}")
+
+    def _run_backup_streaming(self, args: list[str], progress_callback: callable) -> tuple[str, dict]:
+        """Run backup with streaming JSON output for progress updates."""
+        cmd = ["restic"] + args
+        logger.debug(f"Running restic command (streaming): {' '.join(shlex.quote(arg) for arg in cmd)}")
+
+        summary = {}
+        snapshot_id = None
+
+        try:
+            process = subprocess.Popen(
+                cmd,
+                env=self._get_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+
+            for line in process.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    data = json.loads(line)
+                    msg_type = data.get("message_type", "")
+
+                    if msg_type == "status":
+                        # Real-time progress update
+                        progress_callback(data)
+                    elif msg_type == "summary":
+                        # Final summary
+                        summary = data
+                        snapshot_id = data.get("snapshot_id")
+                        progress_callback(data)
+
+                except json.JSONDecodeError:
+                    logger.debug(f"Non-JSON output: {line}")
+
+            process.wait()
+
+            if process.returncode != 0:
+                stderr = process.stderr.read()
+                raise ResticError(f"Backup failed: {stderr}")
+
+            if not snapshot_id:
+                raise ResticError("No snapshot ID returned from backup")
+
+            return snapshot_id, summary
+
+        except FileNotFoundError:
+            raise ResticError("Restic binary not found. Please install restic first.")
 
     def list_snapshots(
         self, tags: list[str] = None, paths: list[str] = None
@@ -291,3 +354,62 @@ class ResticWrapper:
 
         # Assume it's a snapshot ID
         return ref
+
+    def diff_snapshots(self, snapshot1: str, snapshot2: str) -> dict[str, Any]:
+        """Compare two snapshots and return file changes.
+
+        Returns dict with keys: added, removed, modified (lists of file paths)
+        """
+        args = ["diff", "--json", snapshot1, snapshot2]
+
+        result = self._run_command(args)
+
+        changes = {"added": [], "removed": [], "modified": []}
+
+        try:
+            # restic diff outputs JSON lines
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                entry = json.loads(line)
+
+                # restic diff JSON format has 'message_type' for status messages
+                # and actual diff entries with 'path' and 'modifier'
+                if "path" in entry:
+                    modifier = entry.get("modifier", "")
+                    path = entry["path"]
+
+                    if modifier == "+":
+                        changes["added"].append(path)
+                    elif modifier == "-":
+                        changes["removed"].append(path)
+                    elif modifier == "M":
+                        changes["modified"].append(path)
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse diff output: {e}")
+
+        return changes
+
+    def ls_snapshot(self, snapshot_id: str, path: str = "") -> list[dict[str, Any]]:
+        """List files in a snapshot."""
+        args = ["ls", "--json", snapshot_id]
+        if path:
+            args.append(path)
+
+        result = self._run_command(args)
+
+        files = []
+        try:
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                entry = json.loads(line)
+                # Skip the snapshot header entry
+                if entry.get("struct_type") == "snapshot":
+                    continue
+                files.append(entry)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse ls output: {e}")
+
+        return files

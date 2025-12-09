@@ -15,7 +15,7 @@ cat backup_config.json
   "name": "crucial-ssd-backup",
   "source_paths": [
     "/Users/z/_MBJ/accounting",
-    "/Users/z/_MBJ/management", 
+    "/Users/z/_MBJ/management",
     "/Users/z/_MBJ/ongoing",
     "/Users/z/_MBJ/staff"
   ],
@@ -30,7 +30,7 @@ cat backup_config.json
 
 # Working commands
 python -m src.cli status        # ✅ Shows 4 snapshots, healthy repo
-python -m src.cli log           # ✅ Rich table output with metadata  
+python -m src.cli log           # ✅ Rich table output with metadata
 python -m src.cli show latest   # ✅ Detailed snapshot view with 24K files
 python -m src.cli snapshot -m "Monthly backup"  # ✅ Creates new snapshot
 ```
@@ -50,13 +50,12 @@ This project uses `uv` for package management and `direnv` for automatic virtual
 
 **Environment Configuration (`.envrc`):**
 ```bash
-export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
-unset VIRTUAL_ENV
-source $UV_PROJECT_ENVIRONMENT/bin/activate
+export UV_PROJECT_ENVIRONMENT=.venv
+source .venv/bin/activate
 ```
 
 **Key Points:**
-- Dependencies are installed in `~/.venv-shared` (shared across projects)
+- Dependencies are installed in `.venv` (local to this project)
 - `direnv` automatically activates the environment when entering the project directory
 - No need for `uv run` prefix when direnv is active
 
@@ -103,22 +102,22 @@ class ModernBackupManager:
     def __init__(self, config: BackupConfig):
         self.config = config
         self.restic = ResticWrapper(
-            config.restic_repo, 
+            config.restic_repo,
             keychain_account=config.keychain_account  # ✅ Keychain integration
         )
         self.metadata_store = MetadataStore(config.restic_repo / "metadata")
-        
+
     def snapshot(self, message: str = None, tags: List[str] = None):
         """✅ WORKING: Create a snapshot with Git-like semantics"""
         # Pre-backup validation
         self._validate_sources()
-        
+
         # Create restic snapshot with keychain authentication
         snapshot_id = self.restic.backup(
             paths=self.config.source_paths,
             tags=tags or []
         )
-        
+
         # Store rich metadata (like Git commits)
         metadata = SnapshotMetadata(
             snapshot_id=snapshot_id,
@@ -129,13 +128,13 @@ class ModernBackupManager:
             file_changes=self._detect_changes()
         )
         self.metadata_store.save(metadata)  # ✅ SQLite storage working
-        
+
         return snapshot_id
-        
+
     def log(self, limit: int = 10) -> List[SnapshotMetadata]:
         """✅ WORKING: Git-like log of snapshots"""
         return self.metadata_store.get_recent(limit)
-        
+
     def restore(self, ref: str, target: Path, selective_paths: List[str] = None):
         """✅ WORKING: Restore with Git-like reference support"""
         snapshot_id = self._resolve_ref(ref)  # Support HEAD~1, tags, etc.
@@ -144,14 +143,14 @@ class ModernBackupManager:
 
 ## Key Features (ALL IMPLEMENTED)
 
-✅ **Proven backup tool** - Restic is battle-tested for backups  
-✅ **Python layer adds Git semantics** - Familiar interface for developers  
-✅ **Better performance** - Restic's incremental backup is superior  
-✅ **Security by default** - macOS Keychain encryption without extra setup  
-✅ **Simpler maintenance** - One primary tool with Python enhancements  
-✅ **Rich metadata** - SQLite storage for Git-like commit messages  
-✅ **Real-time monitoring** - Watchdog file system events  
-✅ **Beautiful CLI** - Rich terminal UI with tables and progress bars  
+✅ **Proven backup tool** - Restic is battle-tested for backups
+✅ **Python layer adds Git semantics** - Familiar interface for developers
+✅ **Better performance** - Restic's incremental backup is superior
+✅ **Security by default** - macOS Keychain encryption without extra setup
+✅ **Simpler maintenance** - One primary tool with Python enhancements
+✅ **Rich metadata** - SQLite storage for Git-like commit messages
+✅ **Real-time monitoring** - Watchdog file system events
+✅ **Beautiful CLI** - Rich terminal UI with tables and progress bars
 
 ## Production Usage
 
@@ -219,16 +218,16 @@ CLAUDE.md              # ✅ AI context and implementation details
 
 ## Testing Results
 
-✅ Repository health: Healthy  
-✅ Total snapshots: 5 (4 previous + 1 exclusion test)  
-✅ Keychain authentication: Working  
-✅ File processing: 46,681 files analyzed  
-✅ Exclusion system: Comprehensive programming language defaults  
-✅ .backupignore support: Hierarchical exclusion files working  
-✅ Rich CLI output: Tables, progress bars, colors  
-✅ Git-like references: HEAD, HEAD~1, latest, tags  
-✅ Migration: Successful from environment variables  
-✅ Exclusion commands: exclude-test, create-backupignore working  
+✅ Repository health: Healthy
+✅ Total snapshots: 5 (4 previous + 1 exclusion test)
+✅ Keychain authentication: Working
+✅ File processing: 46,681 files analyzed
+✅ Exclusion system: Comprehensive programming language defaults
+✅ .backupignore support: Hierarchical exclusion files working
+✅ Rich CLI output: Tables, progress bars, colors
+✅ Git-like references: HEAD, HEAD~1, latest, tags
+✅ Migration: Successful from environment variables
+✅ Exclusion commands: exclude-test, create-backupignore working
 
 ## Status: PRODUCTION READY
 
@@ -262,26 +261,19 @@ python -m src.cli exclude-test --show-excluded
 
 ## Development Environment Configuration
 
-### direnv + Shared Virtual Environment
+### direnv + Local Virtual Environment
 
-The project is configured for automatic environment activation:
-
-**Setup in `~/.zshrc`:**
-```bash
-export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
-unset VIRTUAL_ENV
-```
+The project is configured for automatic environment activation using a local `.venv` directory:
 
 **Project `.envrc`:**
 ```bash
-export UV_PROJECT_ENVIRONMENT=$HOME/.venv-shared
-unset VIRTUAL_ENV
-source $UV_PROJECT_ENVIRONMENT/bin/activate
+export UV_PROJECT_ENVIRONMENT=.venv
+source .venv/bin/activate
 ```
 
 **Benefits:**
 - ✅ Automatic venv activation when entering project directory
-- ✅ Shared dependencies across multiple projects (~/.venv-shared)
+- ✅ Local dependencies isolated to this project (.venv)
 - ✅ No need for `uv run` prefix in commands
 - ✅ Seamless integration with uv package manager
 - ✅ One-time `direnv allow` per project
@@ -293,4 +285,3 @@ python -m src.cli log           # Works immediately, no prefix needed
 uv add new-package              # Add dependencies easily
 uv sync                         # Sync dependencies
 ```
-

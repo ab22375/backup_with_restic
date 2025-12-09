@@ -1,11 +1,14 @@
 import json
+import sys
+from datetime import datetime
 from pathlib import Path
 
 import click
 from loguru import logger
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
 
@@ -14,6 +17,20 @@ from .keychain_helper import KeychainManager
 from .models import BackupConfig, RetentionPolicy
 
 console = Console()
+
+
+def configure_logging(debug: bool):
+    """Configure loguru based on debug flag."""
+    logger.remove()  # Remove default handler
+    if debug:
+        logger.add(
+            sys.stderr,
+            format="<dim>{time:HH:mm:ss}</dim> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+            level="DEBUG",
+        )
+    else:
+        # In non-debug mode, only show warnings and errors
+        logger.add(sys.stderr, format="<level>{message}</level>", level="WARNING")
 
 
 def load_config(config_path: Path) -> BackupConfig:
@@ -43,14 +60,103 @@ def load_config(config_path: Path) -> BackupConfig:
 
 @click.group()
 @click.option("--config", "-c", default="backup_config.json", help="Configuration file path")
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+@click.option("--debug", is_flag=True, help="Enable debug logging")
 @click.pass_context
-def cli(ctx, config, verbose):
-    if verbose:
-        logger.add(lambda msg: console.print(msg, style="dim"))
-
+def cli(ctx, config, debug):
+    configure_logging(debug)
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = Path(config)
+    ctx.obj["debug"] = debug
+
+
+def format_bytes(size: int) -> str:
+    """Format bytes to human readable string."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if abs(size) < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} PB"
+
+
+def create_progress_table(status: dict) -> Table:
+    """Create a table showing current backup progress."""
+    table = Table(box=None, show_header=False, padding=(0, 1))
+    table.add_column("Label", style="dim")
+    table.add_column("Value", style="bold")
+
+    # Current file being processed
+    current_file = status.get("current_files", [""])[0] if status.get("current_files") else ""
+    if current_file:
+        # Truncate long paths
+        if len(current_file) > 60:
+            current_file = "..." + current_file[-57:]
+        table.add_row("📄 Current:", current_file)
+
+    # Files processed
+    files_done = status.get("files_done", 0)
+    total_files = status.get("total_files", 0)
+    if total_files:
+        table.add_row("📁 Files:", f"{files_done:,} / {total_files:,}")
+    else:
+        table.add_row("📁 Files:", f"{files_done:,}")
+
+    # Bytes processed
+    bytes_done = status.get("bytes_done", 0)
+    total_bytes = status.get("total_bytes", 0)
+    if total_bytes:
+        pct = (bytes_done / total_bytes * 100) if total_bytes else 0
+        table.add_row("💾 Data:", f"{format_bytes(bytes_done)} / {format_bytes(total_bytes)} ({pct:.1f}%)")
+    else:
+        table.add_row("💾 Data:", format_bytes(bytes_done))
+
+    return table
+
+
+def print_backup_summary(snapshot_id: str, stats: dict, message: str = None, tags: list = None):
+    """Print a nice backup summary report."""
+    console.print()
+    console.print("[bold green]✅ Backup Complete[/bold green]")
+    console.print()
+
+    # Summary table
+    table = Table(box=None, show_header=False, padding=(0, 2))
+    table.add_column("", style="dim")
+    table.add_column("", style="bold")
+
+    table.add_row("Snapshot ID:", snapshot_id[:12])
+    table.add_row("Duration:", f"{stats.get('duration_seconds', 0):.1f}s")
+
+    if message:
+        table.add_row("Message:", message)
+    if tags:
+        table.add_row("Tags:", ", ".join(tags))
+
+    console.print(table)
+    console.print()
+
+    # File statistics
+    files_new = stats.get("files_new", 0)
+    files_changed = stats.get("files_changed", 0)
+    files_unmodified = stats.get("files_unmodified", 0)
+    total_files = files_new + files_changed + files_unmodified
+
+    console.print("[bold]File Statistics:[/bold]")
+    stats_table = Table(box=None, show_header=False, padding=(0, 2))
+    stats_table.add_column("", style="dim")
+    stats_table.add_column("", justify="right")
+
+    stats_table.add_row("  Total files processed:", f"{total_files:,}")
+    if files_new:
+        stats_table.add_row("  New files:", f"[green]+{files_new:,}[/green]")
+    if files_changed:
+        stats_table.add_row("  Changed files:", f"[yellow]~{files_changed:,}[/yellow]")
+    stats_table.add_row("  Unchanged files:", f"{files_unmodified:,}")
+
+    data_added = stats.get("data_added", 0)
+    if data_added:
+        stats_table.add_row("  Data added:", format_bytes(data_added))
+
+    console.print(stats_table)
 
 
 @cli.command()
@@ -62,27 +168,62 @@ def snapshot(ctx, message, tag, no_validate):
     config = load_config(ctx.obj["config_path"])
     manager = ModernBackupManager(config)
 
-    with Progress(
-        SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
-    ) as progress:
-        task = progress.add_task("Creating snapshot...", total=None)
+    # State for progress updates
+    progress_state = {"status": {}, "finished": False}
 
-        try:
-            snapshot_id = manager.snapshot(
-                message=message, tags=list(tag) if tag else None, validate_sources=not no_validate
-            )
-            progress.update(task, description="Snapshot created successfully")
-            console.print(f"✅ Created snapshot: [bold green]{snapshot_id[:12]}...[/bold green]")
+    def progress_callback(data):
+        """Handle progress updates from restic."""
+        progress_state["status"] = data
+        if data.get("message_type") == "summary":
+            progress_state["finished"] = True
 
-            if message:
-                console.print(f"📝 Message: {message}")
-            if tag:
-                console.print(f"🏷️  Tags: {', '.join(tag)}")
+    try:
+        console.print(f"[dim]Repository: {config.restic_repo}[/dim]")
+        console.print(f"[dim]Sources: {len(config.source_paths)} paths[/dim]")
+        console.print()
 
-        except Exception as e:
-            progress.update(task, description="Snapshot failed")
-            console.print(f"❌ Snapshot failed: [bold red]{e}[/bold red]")
-            raise click.ClickException(str(e))
+        with Live(console=console, refresh_per_second=4) as live:
+            # Start backup in progress callback mode
+            import threading
+            result = {"snapshot_id": None, "stats": None, "error": None}
+
+            def run_backup():
+                try:
+                    snapshot_id, stats = manager.snapshot(
+                        message=message,
+                        tags=list(tag) if tag else None,
+                        validate_sources=not no_validate,
+                        progress_callback=progress_callback,
+                    )
+                    result["snapshot_id"] = snapshot_id
+                    result["stats"] = stats
+                except Exception as e:
+                    result["error"] = e
+
+            backup_thread = threading.Thread(target=run_backup)
+            backup_thread.start()
+
+            # Update display while backup runs
+            while backup_thread.is_alive():
+                if progress_state["status"]:
+                    table = create_progress_table(progress_state["status"])
+                    live.update(Panel(table, title="[bold blue]Creating Snapshot...[/bold blue]", border_style="blue"))
+                backup_thread.join(timeout=0.25)
+
+        if result["error"]:
+            raise result["error"]
+
+        # Print summary
+        print_backup_summary(
+            result["snapshot_id"],
+            result["stats"],
+            message=message,
+            tags=list(tag) if tag else None,
+        )
+
+    except Exception as e:
+        console.print(f"\n[bold red]❌ Snapshot failed:[/bold red] {e}")
+        raise click.ClickException(str(e))
 
 
 @cli.command()

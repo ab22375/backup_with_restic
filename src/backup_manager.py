@@ -24,16 +24,18 @@ class ModernBackupManager:
         self._last_snapshot_info = None
 
     def snapshot(
-        self, message: str = None, tags: list[str] = None, validate_sources: bool = True
-    ) -> str:
+        self,
+        message: str = None,
+        tags: list[str] = None,
+        validate_sources: bool = True,
+        progress_callback: callable = None,
+    ) -> tuple[str, dict]:
+        """Create a snapshot and return (snapshot_id, summary_stats)."""
         start_time = time.time()
 
         try:
             if validate_sources:
                 self._validate_sources()
-
-            # Detect changes since last snapshot
-            file_changes = self._detect_changes()
 
             # Create restic snapshot
             all_tags = (tags or []).copy()
@@ -41,27 +43,34 @@ class ModernBackupManager:
                 all_tags.append(f"message:{message}")
 
             logger.info(f"Creating snapshot for {len(self.config.source_paths)} paths")
-            snapshot_id = self.restic.backup(
+            snapshot_id, backup_summary = self.restic.backup(
                 paths=self.config.source_paths,
                 tags=all_tags,
                 exclude_patterns=self.config.exclude_patterns,
                 include_patterns=self.config.include_patterns,
                 message=message,
+                progress_callback=progress_callback,
             )
 
             # Get parent snapshot for lineage
             parent_snapshot = self._get_last_snapshot_id()
 
-            # Get backup statistics
-            restic_stats = self.restic.get_repo_stats()
+            # Build stats from restic summary
             backup_stats = {
                 "duration_seconds": time.time() - start_time,
-                "files_changed": len(
-                    [c for c in file_changes if c.change_type in ["added", "modified"]]
-                ),
-                "total_size_bytes": restic_stats.get("total_size", 0),
-                "total_file_count": restic_stats.get("total_file_count", 0),
+                "files_new": backup_summary.get("files_new", 0),
+                "files_changed": backup_summary.get("files_changed", 0),
+                "files_unmodified": backup_summary.get("files_unmodified", 0),
+                "dirs_new": backup_summary.get("dirs_new", 0),
+                "dirs_changed": backup_summary.get("dirs_changed", 0),
+                "dirs_unmodified": backup_summary.get("dirs_unmodified", 0),
+                "data_added": backup_summary.get("data_added", 0),
+                "total_files_processed": backup_summary.get("total_files_processed", 0),
+                "total_bytes_processed": backup_summary.get("total_bytes_processed", 0),
             }
+
+            # Detect changes for metadata (simplified)
+            file_changes = self._detect_changes()
 
             # Store rich metadata
             metadata = SnapshotMetadata(
@@ -80,7 +89,7 @@ class ModernBackupManager:
             logger.info(
                 f"Snapshot {snapshot_id} created successfully in {backup_stats['duration_seconds']:.2f}s"
             )
-            return snapshot_id
+            return snapshot_id, backup_stats
 
         except Exception as e:
             logger.error(f"Snapshot creation failed: {e}")
@@ -263,32 +272,49 @@ class ModernBackupManager:
                 raise PermissionError(f"Cannot read source path: {path}")
 
     def _detect_changes(self) -> list[FileChange]:
+        """Detect file changes since the last snapshot using restic diff."""
         changes = []
 
-        # Simple change detection - compare with last snapshot
-        # In a full implementation, this would be more sophisticated
-        last_snapshot = self._get_last_snapshot_info()
-        if not last_snapshot:
-            # First snapshot - everything is new
-            for source_path in self.config.source_paths:
-                for file_path in self._walk_directory(source_path):
-                    try:
-                        stat = file_path.stat()
-                        changes.append(
-                            FileChange(
-                                path=str(file_path.relative_to(source_path)),
-                                change_type="added",
-                                size_bytes=stat.st_size,
-                                checksum=self._calculate_checksum(file_path),
-                            )
-                        )
-                    except (OSError, PermissionError) as e:
-                        logger.warning(f"Cannot access {file_path}: {e}")
-                        continue
-        else:
-            # Compare with previous snapshot (simplified)
-            # A full implementation would store file metadata and compare timestamps/checksums
-            logger.debug("Change detection against previous snapshot not fully implemented")
+        last_snapshot_id = self._get_last_snapshot_id()
+        if not last_snapshot_id:
+            # First snapshot - everything is new, but don't enumerate all files
+            # (too slow for large directories, restic will handle it)
+            logger.debug("First snapshot - skipping change detection")
+            return changes
+
+        try:
+            # Use restic diff to compare last snapshot with current filesystem
+            # Note: restic diff compares two snapshots, not filesystem vs snapshot
+            # For filesystem comparison, we compare second-to-last vs last snapshot
+            snapshots = self.restic.list_snapshots()
+            if len(snapshots) < 2:
+                logger.debug("Only one snapshot exists - skipping change detection")
+                return changes
+
+            # Get the two most recent snapshots
+            prev_snapshot_id = snapshots[-2]["id"]
+            last_snapshot_id = snapshots[-1]["id"]
+
+            diff_result = self.restic.diff_snapshots(prev_snapshot_id, last_snapshot_id)
+
+            # Convert to FileChange objects
+            for path in diff_result.get("added", []):
+                changes.append(FileChange(path=path, change_type="added"))
+
+            for path in diff_result.get("removed", []):
+                changes.append(FileChange(path=path, change_type="deleted"))
+
+            for path in diff_result.get("modified", []):
+                changes.append(FileChange(path=path, change_type="modified"))
+
+            logger.debug(
+                f"Change detection: {len(diff_result.get('added', []))} added, "
+                f"{len(diff_result.get('removed', []))} removed, "
+                f"{len(diff_result.get('modified', []))} modified"
+            )
+
+        except Exception as e:
+            logger.warning(f"Change detection failed: {e}")
 
         return changes
 
