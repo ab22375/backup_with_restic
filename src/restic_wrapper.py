@@ -177,9 +177,13 @@ class ResticWrapper:
 
             process.wait()
 
-            if process.returncode != 0:
+            if process.returncode not in (0, 3):
                 stderr = process.stderr.read()
                 raise ResticError(f"Backup failed: {stderr}")
+
+            if process.returncode == 3:
+                stderr = process.stderr.read()
+                logger.warning(f"Backup completed with warnings (some files could not be read):\n{stderr}")
 
             if not snapshot_id:
                 raise ResticError("No snapshot ID returned from backup")

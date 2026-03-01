@@ -6,7 +6,10 @@
       "/Users/z/dockers",
       "/Users/z/Downloads",
       "/Users/z/Obsidian",
-      "/Users/z/caddy"
+      "/Users/z/caddy",
+      "/Users/z/.config",
+      "/Users/z/.claude",
+      "/Users/z/bin"
   ],
   "restic_repo": "/Volumes/Crucial2506/restic-backup",
   "keychain_account": "restic-backup",
@@ -148,6 +151,10 @@
     "Desktop.ini",
     "$RECYCLE.BIN/",
     "*.lnk",
+
+    "# Docker volumes (permission-restricted)",
+    "dockers/adguard/conf",
+    "dockers/adguard/work",
 
     "# Logs and temp files",
     "*.log",
